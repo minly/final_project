@@ -24,11 +24,10 @@ using namespace std;
 #define DES_DIMENSION 128
 #define N_CENTERS 500
 /****************************** Globals *********************************************/
-string dir( "D:\\airport training data\\train" );
-int np_files = 37;//positive samples
-int nn_files = 62;//negative samples
+string dir( "D:\\¸Û¿Ú\\train" );
+int np_files = 31;//positive samples
+int nn_files = 31;//negative samples
 
-int blk_len = 30;//size of block, (square)
 int total_points = 0;
 
 char* centers_file = "D:\\airport training data\\train\\center.xml";
@@ -36,10 +35,10 @@ char* model_file = "D:\\airport training data\\train\\model.xml";
 /************************************************************************************/
 
 void printMat(const cv::Mat mat, char* filename, char* way );
-void bof( cv::Mat _descriptors, cv::Mat& feature, std::vector<int> count_points, int _n_blks, cv::Mat center );
+void bof( cv::Mat _descriptors, cv::Mat& feature, std::vector<int> count_points, int nz_imgs, cv::Mat center );
 
 
-int aa()
+int main()
 {
 	vector<string> flist;
 	string filename;
@@ -64,12 +63,14 @@ int aa()
 	}
 		
 	vector<string>::const_iterator iterator;
-	cv::Mat _image, mask;
-	//cv::SIFT sift(10, 5 ); 
-	cv::SURF surf;
-	int width, height, cn, rn, k, m, n;
-	int c = 0, r = 0, num = 0, count = 0, _n_blks = 0, n_imgs = 0; 
-	int np_blks;
+	cv::Mat _image;
+	cv::SIFT sift; 
+	//cv::SURF surf;
+	int width, height, k, m, n;
+	int num = 0, count = 0;
+	int n_imgs = 0;//total num of images
+	int nz_imgs = 0; //num of images have descriptors
+	int np_imgs = 0;//num of positive images that have descriptors
 	std::vector<cv::KeyPoint> keypoints;
 	std::vector<int> count_points;
 	cv::Mat _descriptor;
@@ -81,68 +82,37 @@ int aa()
 		//cv::cvtColor( _image, gray_image, CV_BGR2GRAY );//BGR? or RGB?
 		width = _image.cols;
 		height = _image.rows;
-		mask.create( height, width, CV_8UC1 );
-		cn = width / blk_len;
-		rn = height / blk_len;
-	   
-		/*extract surf for each block*/
-		for( r = 0; r < rn; r++)
-		{			
-			for( c = 0; c < cn; c++)
-			{			
-				/*** set the mask***/
-				mask = 0;
-				mask.rowRange( blk_len * r, blk_len * ( r + 1 ) ).colRange( blk_len * c, blk_len * ( c + 1 ) ) = 1;
-				//printMat( *mask, "D:/mask", "w" );
-
-				/*** set the keypoints : for dense sift the mask will not be used, so here to set keypoints for each block every loop ***/
-				for( i = 0; i < height; i++ )
-					for( j = 0; j < width; j++ )
-					{
-						if( mask.at< uchar >( i, j ) ==  1 )
-							keypoints.push_back( cv::KeyPoint( i, j, 10 ) );
-					}
-
-				/*** extract sift descriptor ***/
-				//sift( _image, *mask, keypoints, descriptor, false );//gray_image convert to 8-bit?
-				surf( _image, cv::noArray(), keypoints, _descriptor, true);//surf automatically merge the keypoints, if the vector is not reallocated
-				//printMat(_descriptor, "D:/_descriptor", "w" );
-				num = _descriptor.rows;
-				count_points.push_back( num );//store num of points for each block
-				if( num != 0)
-				{
-					for( m = 0; m < num; m++)
-						for( n = 0; n < DES_DIMENSION; n++ )
-							descriptors.push_back( _descriptor.at<float>( m, n ) );
-					total_points += num;
-					_n_blks++;
-				}
-				keypoints.clear();//surf would not deallocate the keypoits vector
-				if(n_imgs == 52)
-					printf("r=%d,c=%d", r, c);
-
-				
+	   				
+		
+		/*** set the keypoints : for dense sift the mask will not be used, so here to set keypoints for each block every loop ***/
+		for( i = 0; i < height; i++ )
+			for( j = 0; j < width; j++ )
+			{
+				keypoints.push_back( cv::KeyPoint( i, j, 0 ) );
 			}
+
+		/*** extract sift descriptor ***/
+		sift( _image, cv::noArray(), keypoints, _descriptor, true );//gray_image convert to 8-bit?
+		//surf( _image, cv::noArray(), keypoints, _descriptor, true);//surf automatically merge the keypoints, if the vector is not reallocated
+		//printMat(_descriptor, "D:/_descriptor", "w" );
+		num = _descriptor.rows;
+		count_points.push_back( num );//store num of points for each block
+		if( num != 0)
+		{
+			for( m = 0; m < num; m++)
+				for( n = 0; n < DES_DIMENSION; n++ )
+					descriptors.push_back( _descriptor.at<float>( m, n ) );
+			total_points += num;
+			nz_imgs++;
 		}
+		keypoints.clear();//surf would not deallocate the keypoits vector		
 		n_imgs++;
 		
-		if( n_imgs == np_files ) np_blks = _n_blks;//record the num of the positive blocks
-		std::cout << *iterator << " :  " << rn*cn << endl;
+		if( n_imgs == np_files ) np_imgs = nz_imgs;//record the num of the positive blocks
 	}
 
 	cv::Mat _descriptors( descriptors, false );
 	_descriptors = _descriptors.reshape( 1, total_points );
-	/*calculate the total points*/
-	/*FILE* f;
-	f = fopen("D:/count_points", "w");
-	if(!f) exit(0); 
-	for( std::vector<int>::const_iterator iter = count_points.begin(); iter != count_points.end(); iter++ )
-	{
-		num = *iter;
-		fprintf( f, "%d\n", num );
-	}
-	fclose( f );*/
-	//printMat( _descriptors, "D:/_descriptors", "w");
 	std::cout << "total points: " << total_points << endl;
 
 
@@ -150,13 +120,14 @@ int aa()
 	/*kmeans*/
 	cv::Mat centers, label;
 	cv::Mat _feature;
-	cv::FileStorage fs( centers_file, cv::FileStorage.WRITE );
+	cv::FileStorage fs( centers_file, cv::FileStorage::WRITE );
 	cv::kmeans( _descriptors, N_CENTERS, label, cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 10, 1.0 ), 1, cv::KMEANS_PP_CENTERS, centers );
+	printMat( _descriptors, "D://_descriptors", "w");
 	fs << "centers" << centers;
 	fs.release();
 
 	//printMat( centers, "D:/centers", "w");
-	bof( _descriptors, _feature, count_points, _n_blks, centers );//final feature	
+	bof( _descriptors, _feature, count_points, nz_imgs, centers );//final feature	
 	//printMat( _feature, "D:/feature", "w");
 
 
@@ -169,23 +140,23 @@ int aa()
 	//params.degree
 	//params.gamma
 	//params.coef0
-	cv::Mat _response( _n_blks, 1, CV_32FC1 );
-	_response.rowRange( 0, np_blks ) = 1;
-	_response.rowRange( np_blks, _n_blks ) = -1;
+	cv::Mat _response( nz_imgs, 1, CV_32FC1 );
+	_response.rowRange( 0, np_imgs ) = 1;
+	_response.rowRange( np_imgs, nz_imgs ) = -1;
 	svm.train( _feature, _response, cv::Mat() , cv::Mat(), _params );
 	svm.save( model_file );
 	return 0;
 }
 
-void bof( cv::Mat _descriptors, cv::Mat& feature, std::vector<int> count_points, int _n_blks, cv::Mat centers )//feature: output
+void bof( cv::Mat _descriptors, cv::Mat& feature, std::vector<int> count_points, int nz_imgs, cv::Mat centers )//feature: output
 {
-	int n_blks = count_points.size();
+	int n_imgs = count_points.size();
 	int n_centers = centers.rows;
 	int count = 0, i, j, k, t = 0, num, center_idx;
 	std::vector<int>::const_iterator iter = count_points.begin();
 	cv::Mat desc, dist, sorted_idx;	
-	feature = cv::Mat::zeros( _n_blks, n_centers, CV_32FC1 );//initialize
-	for( i = 0; i < n_blks; i++ )
+	feature = cv::Mat::zeros( nz_imgs, n_centers, CV_32FC1 );//initialize
+	for( i = 0; i < n_imgs; i++ )
 	{
 		num = *iter;
 		if( num != 0) 

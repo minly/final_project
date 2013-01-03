@@ -1,5 +1,5 @@
 /*
-extract feature discriptors of all the images under the dir and then combine them
+extract feature discriptors of the test image given and then combine them
 @author Minly
 @version 
 */
@@ -18,19 +18,21 @@ extract feature discriptors of all the images under the dir and then combine the
 #include"opencv2/features2d/features2d.hpp"
 #include"opencv2/nonfree/features2d.hpp"
 #include"opencv2/nonfree/nonfree.hpp"
+#include"Image.h"
+#include"ImageFeature.h"
 using namespace std;
 
 
 #define DES_DIMENSION 128
 #define N_CENTERS 500
 /****************************** Globals *********************************************/
-string filename( "D:\\港口\\test\\test1.tif" );
+string filename( "D:\\港口\\test\\test.tif" );
 int total_points = 0;
-int blk_len = 30;
+int blk_len = 400;
 
-char* centers_file = "D:\\airport training data\\train\\center.xml";
-char* model_file = "D:\\airport training data\\train\\model.xml";
-string target_file( "D:\\港口\\test\\test1_result.tif" );
+char* centers_file = "D:\\港口\\args\\center.xml";
+char* model_file = "D:\\港口\\args\\model.xml";
+string target_file( "D:\\港口\\result\\test1_result.tif" );
 /************************************************************************************/
 
 void printMat(const cv::Mat mat, char* filename, char* way );
@@ -43,86 +45,129 @@ int main()
 	
 	int i, j;		
 	vector<string>::const_iterator iterator;
-	cv::Mat _image, mask;
-	//cv::SIFT sift(10, 5 ); 
-	cv::SURF surf;
-	int width, height, cn, rn, k, m, n;
-	int c = 0, r = 0, num = 0, count = 0, _n_blks = 0; 
-	std::vector<cv::KeyPoint> keypoints;
+	Image<uchar> image;
+	cv::Mat mask_img;	
+	Image<float> imsift;
+	int width, height, k = 0, m, n;
+	int c = 0, r = 0, num = 0, count = 0, _n_blks = 0, offset = 0; 
 	std::vector<int> count_points;
 	cv::Mat _descriptor;
 	std::vector<float> descriptors;
-	_image = cv::imread( filename, CV_LOAD_IMAGE_GRAYSCALE );//read image and convert to grayscale
-	//_image = cv::imread( "D:\\airport training data\\negative\\negative8.tif", CV_LOAD_IMAGE_GRAYSCALE );
-	//cv::cvtColor( _image, gray_image, CV_BGR2GRAY );//BGR? or RGB?
-	width = _image.cols;
-	height = _image.rows;
-	mask.create( height, width, CV_8UC1 );
-	cn = width / blk_len;
-	rn = height / blk_len;
+	image.imread( filename.c_str() );//read image and convert to grayscale
+	//image = cv::imread( filename, CV_LOAD_IMAGE_GRAYSCALE );
 	
+	int h = image.height();
+	int w = image.width();
+	
+	int rn = h / blk_len;
+	int cn = w / blk_len;
+	
+
+	int chn = image.nchannels();
+	Image<uchar> _image( blk_len, blk_len, chn );
+	
+	int npixels = blk_len * blk_len * chn;
+	int offset_r = 0, offset_c = 0;
+	n = 0;
+	int n_a_line = blk_len * chn;
 	/*extract surf for each block*/
 	for( r = 0; r < rn; r++)
 	{			
 		for( c = 0; c < cn; c++)
-		{			
-			/*set the mask*/
-			mask = cv::Scalar_< int>( 0 );
-			mask.rowRange( blk_len * r, blk_len * ( r + 1 ) ).colRange( blk_len * c, blk_len * ( c + 1 ) ) = 1;
-			//printMat( *mask, "D:/mask", "w" );
-			/* set the keypoints : for dense sift the mask will not be used, so here to set keypoints for each block every loop*/
-			for( i = 0; i < height; i++ )
-				for( j = 0; j < width; j++ )
+		{	
+			offset_r = ( blk_len * r ) * w * chn;
+			offset_c = ( blk_len * c ) * chn ;
+			//get the block image
+			for( j = 0; j < npixels; j++ )
+			{					
+				_image.pData[ j ] = image.pData[ offset_r + offset_c + ( k++ ) ];
+				_image.pData[ ++j ] = image.pData[ offset_r + offset_c + ( k++ ) ];
+				_image.pData[ ++j ] = image.pData[ offset_r + offset_c + ( k++ ) ];
+				n += 3 ;
+				if( n == n_a_line )
 				{
-					if( mask.at< uchar >( i, j ) ==  1 )
-						keypoints.push_back( cv::KeyPoint( i, j, 10 ) );
+					offset_r += w * chn;
+					n = 0;
+					k = 0;
 				}
-
+			}
+			//_image.imwrite("D://_image.tif" );
+			
+				
+			/*set the mask*/
+			//mask_img = image.rowRange( blk_len * r, blk_len * ( r + 1 ) ).colRange( blk_len * c, blk_len * ( c + 1 ) );
+			//_image.
 			//extract sift descriptor
 			//sift( _image, *mask, keypoints, descriptor, false );//gray_image convert to 8-bit?
-			surf( _image, cv::noArray(), keypoints, _descriptor, true);//surf automatically merge the keypoints, if the vector is not reallocated
+			//surf( _image, cv::noArray(), keypoints, _descriptor, true);//surf automatically merge the keypoints, if the vector is not reallocated
+			ImageFeature::imSIFT<uchar, float>( _image, imsift, 3, 1, true );
 			//printMat(_descriptor, "D:/_descriptor", "w" );
-			num = _descriptor.rows;
+			width = imsift.width();
+			height = imsift.height();	   				
+			num = height * width;
 
 			count_points.push_back( num );//store num of points for each block
 			if( num != 0)
 			{
-				for( m = 0; m < num; m++)
-						for( n = 0; n < DES_DIMENSION; n++ )
-							descriptors.push_back( _descriptor.at<float>( m, n ) );
+				for( i = 0; i < height; i++)
+					for( j = 0; j < width; j++ )
+					{
+						offset = (i*width+j)*DES_DIMENSION;
+						for( k = 0; k < DES_DIMENSION; k++ )
+							descriptors.push_back( imsift.pData[offset+k]);
+					}
 				total_points += num;
 				_n_blks++;
 			}
-			keypoints.clear();//surf would not deallocate the keypoits vector
 			
 		}
 	}
-	
+	_image.~Image();
 	std::cout << rn*cn << endl;
 	
 	cv::Mat _descriptors( descriptors, false );
 	_descriptors = _descriptors.reshape( 1, total_points );
 
 	
-
-
 	/*kmeans*/
 	cv::Mat centers, label;
 	cv::Mat _feature;
 	cv::FileStorage fs;
 	fs.open( centers_file, cv::FileStorage::READ );
 	fs["centers"] >> centers;
-	bof( _descriptors, _feature, count_points, _n_blks, centers );//final feature	
-	printMat( _feature, "D:/feature", "w");
+	bof( _descriptors, _feature, count_points, _n_blks, centers );//final feature
+	fs.release();
 
-
-	/*svm-train*/
-	/*CvSVM svm;	
-	cv::Mat _results( _n_blks, 1, CV_32FC1 );
-	svm.load( model_file );
-	svm.predict( _feature, _results );
-	output_target( _image, count_points, rn, cn, blk_len, _n_blks, _results );*/
 	
+
+//////////////////////////////remove on linux///////////////////////////////////////////////////////////////////	
+	cv::FileStorage fs2(  "D:\\港口\\args\\test_descriptors.xml", cv::FileStorage::WRITE );
+	fs2 << "test_descriptors" << _descriptors;
+	fs2.release();
+	/** save test data which will be used in the train_test**/
+	char* testdata_file = "D:\\港口\\args\\testdata.xml";
+	cv::Mat _count_points( count_points, false );
+	cv::FileStorage fs1( testdata_file, cv::FileStorage::WRITE );
+	fs1 << "feature" << _feature;
+	fs1 << "count_point" << _count_points;//on the premise of densesift	
+	fs1 << "n_blks" << _n_blks;
+	fs1 << "rn" << rn;
+	fs1 << "cn" << cn;
+	fs1 <<"blk_len" << blk_len;
+
+	fs1.release();
+
+/////////////////////////////remove on linux//////////////////////////////////////////////////////////////////////
+
+	/*svm-test*/
+	CvSVM svm = CvSVM();   
+	cv::Mat __image;
+	cv::Mat _results( _n_blks, 1, CV_32FC1 );
+	svm.load( model_file, "my_svm" );
+	svm.predict( _feature, _results );
+	__image = cv::imread( filename, CV_LOAD_IMAGE_GRAYSCALE );
+	output_target( __image, count_points, rn, cn, blk_len, _n_blks, _results );
+
 	return 0;
 }
 
@@ -172,13 +217,14 @@ void bof( cv::Mat _descriptors, cv::Mat& feature, std::vector<int> count_points,
 				}
 			}
 			cv::exp( (-0.001) * dist, dist );//from now on, mat dist is hold the similarity not the distance
+
 			cv::sortIdx( dist, sorted_idx, CV_SORT_EVERY_ROW + CV_SORT_DESCENDING );//sort each row descendently(indices are sorted actually)
 			for( j =0; j < num; j++ )
 			{
 				for( k = 0; k < 4; k++ )
 				{
 					center_idx = sorted_idx.at<int>( j, k );
-					feature.at<float>( t, center_idx ) +=  dist.at<float>( j, center_idx ) / float(2^( k -1 ));
+					feature.at<float>( t, center_idx ) +=  dist.at<float>( j, center_idx ) / std::pow( 2.0, k );
 				}
 			}
 			t++;

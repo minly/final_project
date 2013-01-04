@@ -4,14 +4,16 @@ extract feature discriptors of all the images under the dir and then combine the
 @version 
 */
 
+
 /************************************************************************************/
+
 #include<iostream>
 #include<fstream>
 #include<vector>
 #include<string>
 #include<sstream>
 #include"opencv/cv.h"
-#include"opencv/cxcore.h"
+//#include"opencv/cxcore.h"
 #include"opencv2/opencv.hpp"
 //#include"opencv2/highgui/highgui.hpp"
 //#include"opencv2/core/core.hpp"

@@ -4,6 +4,8 @@ extract feature discriptors of the test image given and then combine them
 @version 
 */
 
+/***********************************Macro********************************************/
+//#define LINUX
 /************************************************************************************/
 #include<iostream>
 #include<fstream>
@@ -13,11 +15,6 @@ extract feature discriptors of the test image given and then combine them
 #include"opencv/cv.h"
 #include"opencv/cxcore.h"
 #include"opencv2/opencv.hpp"
-//#include"opencv2/highgui/highgui.hpp"
-//#include"opencv2/core/core.hpp"
-#include"opencv2/features2d/features2d.hpp"
-#include"opencv2/nonfree/features2d.hpp"
-#include"opencv2/nonfree/nonfree.hpp"
 #include"Image.h"
 #include"ImageFeature.h"
 using namespace std;
@@ -26,16 +23,26 @@ using namespace std;
 #define DES_DIMENSION 128
 #define N_CENTERS 500
 /****************************** Globals *********************************************/
+#ifdef LINUX
+string filename( "../test.tif" );
+char* centers_file = "./args/center.xml";
+char* model_file = "./args/model.xml";
+string target_file( "./result/test_result.tif" );
+#else
 string filename( "D:\\港口\\test\\test.tif" );
+char* centers_file = "D:\\港口\\args\\center.xml";
+char* model_file = "D:\\港口\\args\\model.xml";
+string target_file( "D:\\港口\\result\\test_result.tif" );
+#endif
+
 int total_points = 0;
 int blk_len = 400;
 
-char* centers_file = "D:\\港口\\args\\center.xml";
-char* model_file = "D:\\港口\\args\\model.xml";
-string target_file( "D:\\港口\\result\\test1_result.tif" );
-/************************************************************************************/
 
+/************************************************************************************/
+#ifndef LINUX
 void printMat(const cv::Mat mat, char* filename, char* way );
+#endif
 void bof( cv::Mat _descriptors, cv::Mat& feature, std::vector<int> count_points, int _n_blks, cv::Mat center );
 int output_target( cv::Mat _image, std::vector<int> count_points, int rn, int cn, int blk_len, int _n_blks, cv::Mat _results);
 
@@ -48,8 +55,8 @@ int main()
 	Image<uchar> image;
 	cv::Mat mask_img;	
 	Image<float> imsift;
-	int width, height, k = 0, m, n;
-	int c = 0, r = 0, num = 0, count = 0, _n_blks = 0, offset = 0; 
+	int width, height, n;
+	int c = 0, r = 0, num = 0, _n_blks = 0, offset = 0; 
 	std::vector<int> count_points;
 	cv::Mat _descriptor;
 	std::vector<float> descriptors;
@@ -71,6 +78,7 @@ int main()
 	n = 0;
 	int n_a_line = blk_len * chn;
 	/*extract surf for each block*/
+	cout << "extracting feature..." <<endl;
 	for( r = 0; r < rn; r++)
 	{			
 		for( c = 0; c < cn; c++)
@@ -128,8 +136,10 @@ int main()
 	cv::Mat _descriptors( descriptors, false );
 	_descriptors = _descriptors.reshape( 1, total_points );
 
+	descriptors.clear();
 	
 	/*kmeans*/
+	cout << "kmeans..." <<endl;
 	cv::Mat centers, label;
 	cv::Mat _feature;
 	cv::FileStorage fs;
@@ -138,7 +148,7 @@ int main()
 	bof( _descriptors, _feature, count_points, _n_blks, centers );//final feature
 	fs.release();
 
-	
+	_descriptors.~Mat();
 
 //////////////////////////////remove on linux///////////////////////////////////////////////////////////////////	
 	cv::FileStorage fs2(  "D:\\港口\\args\\test_descriptors.xml", cv::FileStorage::WRITE );
@@ -160,6 +170,7 @@ int main()
 /////////////////////////////remove on linux//////////////////////////////////////////////////////////////////////
 
 	/*svm-test*/
+	cout << "predicting..." <<endl;
 	CvSVM svm = CvSVM();   
 	cv::Mat __image;
 	cv::Mat _results( _n_blks, 1, CV_32FC1 );
@@ -167,7 +178,7 @@ int main()
 	svm.predict( _feature, _results );
 	__image = cv::imread( filename, CV_LOAD_IMAGE_GRAYSCALE );
 	output_target( __image, count_points, rn, cn, blk_len, _n_blks, _results );
-
+	cout << "Done!" <<endl;
 	return 0;
 }
 
@@ -179,7 +190,7 @@ int output_target( cv::Mat _image, std::vector<int> count_points, int rn, int cn
 	std::vector<int>::const_iterator iter = count_points.begin();
 	_results = _results.reshape( 1, _n_blks );
 	cv::Mat image( _image.rows, _image.cols, _image.type() );
-	image = 0;
+	image = cv::Scalar( 0 );
 	for( i = 0; i < rn; i++ )
 		for(j = 0; j < cn; j++ )
 		{
@@ -235,6 +246,8 @@ void bof( cv::Mat _descriptors, cv::Mat& feature, std::vector<int> count_points,
 	}
 }
 
+
+#ifndef LINUX
 void printMat(const cv::Mat mat, char* filename, char* way)
 {
 	int rows = mat.rows;
@@ -256,6 +269,6 @@ void printMat(const cv::Mat mat, char* filename, char* way)
 	fclose(fp);
 	//output.close();
 }
-
+#endif
 
 

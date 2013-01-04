@@ -3,8 +3,8 @@
 #include<string>
 #include<sstream>
 #include"opencv/cv.h"
-#include"opencv2/core/core.hpp"
-#include"opencv/cxcore.h"
+//#include"opencv2/core/core.hpp"
+//#include"opencv/cxcore.h"
 #include"opencv2/opencv.hpp"
 //#include"opencv2/highgui/highgui.hpp"
 //#include"opencv2/core/core.hpp"
@@ -14,9 +14,9 @@ string filename( "D:\\港口\\test\\test.tif" );
 char* traindata_file = "D:\\港口\\args\\traindata.xml";
 char* testdata_file = "D:\\港口\\args\\testdata.xml";
 char* model_file = "D:\\港口\\args\\model.xml";
-char* result_file = "D:\\港口\\result\\test1_result.xml";
+char* result_file = "D:\\港口\\result\\test_result.xml";
 
-string target_file( "D:\\港口\\result\\test1_result.tif" );
+string target_file( "D:\\港口\\result\\test_result.tif" );
 
 
 int output_target( cv::Mat _image, std::vector<int> count_points, int rn, int cn, int blk_len, int _n_blks, cv::Mat _results);

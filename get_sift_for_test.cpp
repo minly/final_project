@@ -24,27 +24,29 @@ using namespace std;
 #define N_CENTERS 500
 /****************************** Globals *********************************************/
 #ifdef LINUX
-string filename( "../test.tif" );
-char* centers_file = "./args/center.xml";
-char* model_file = "./args/model.xml";
-string target_file( "./result/test_result.tif" );
+string filename( "../test/test3_Sandiego18.tif" );
+char* centers_file = "../args/center.xml";
+char* model_file = "../args/model_San18.xml";
+string _target_file( "../result/test3_Sandiego18_result.tif" );
 #else
-string filename( "D:\\港口\\test\\test.tif" );
+string filename( "D:\\港口\\test\\test3_Sandiego18.tif" );
 char* centers_file = "D:\\港口\\args\\center.xml";
-char* model_file = "D:\\港口\\args\\model.xml";
-string target_file( "D:\\港口\\result\\test_result.tif" );
+char* model_file = "D:\\港口\\args\\model_San18.xml";
+string _target_file( "D:\\港口\\result\\test3_Sandiego18_result.tif" );
 #endif
 
 int total_points = 0;
-int blk_len = 400;
+int blk_w = 60;
+int blk_h = 134;
 
 
-/************************************************************************************/
+/********************************Declaration**************************************************/
 #ifndef LINUX
 void printMat(const cv::Mat mat, char* filename, char* way );
 #endif
 void bof( cv::Mat _descriptors, cv::Mat& feature, std::vector<int> count_points, int _n_blks, cv::Mat center );
-int output_target( cv::Mat _image, std::vector<int> count_points, int rn, int cn, int blk_len, int _n_blks, cv::Mat _results);
+int output_target( cv::Mat _image, std::vector<int> count_points, int rn, int cn, int blk_w, int blk_h, int _n_blks, cv::Mat _results, string _target_file );
+cv::Mat nomalize( cv::Mat& mat );
 
 
 int main()
@@ -56,35 +58,35 @@ int main()
 	cv::Mat mask_img;	
 	Image<float> imsift;
 	int width, height, n;
-	int c = 0, r = 0, num = 0, _n_blks = 0, offset = 0; 
+	int c = 0, r = 0, num = 0, _n_blks = 0, offset = 0, k = 0; 
 	std::vector<int> count_points;
 	cv::Mat _descriptor;
 	std::vector<float> descriptors;
 	image.imread( filename.c_str() );//read image and convert to grayscale
 	//image = cv::imread( filename, CV_LOAD_IMAGE_GRAYSCALE );
-	
+	int blk_len = 2;
 	int h = image.height();
 	int w = image.width();
 	
-	int rn = h / blk_len;
-	int cn = w / blk_len;
+	int rn = h / blk_h;
+	int cn = w / blk_w;
 	
 
 	int chn = image.nchannels();
-	Image<uchar> _image( blk_len, blk_len, chn );
+	Image<uchar> _image( blk_w, blk_h, chn );
 	
-	int npixels = blk_len * blk_len * chn;
+	int npixels = blk_h * blk_w * chn;
 	int offset_r = 0, offset_c = 0;
 	n = 0;
-	int n_a_line = blk_len * chn;
-	/*extract surf for each block*/
-	cout << "extracting feature..." <<endl;
+	int n_a_line = blk_w * chn;
+	/*extract surf for each block*/	
+
 	for( r = 0; r < rn; r++)
 	{			
 		for( c = 0; c < cn; c++)
 		{	
-			offset_r = ( blk_len * r ) * w * chn;
-			offset_c = ( blk_len * c ) * chn ;
+			offset_r = ( blk_h * r ) * w * chn;
+			offset_c = ( blk_w * c ) * chn ;
 			//get the block image
 			for( j = 0; j < npixels; j++ )
 			{					
@@ -148,14 +150,16 @@ int main()
 	bof( _descriptors, _feature, count_points, _n_blks, centers );//final feature
 	fs.release();
 
-	_descriptors.~Mat();
+	
 
-//////////////////////////////remove on linux///////////////////////////////////////////////////////////////////	
-	cv::FileStorage fs2(  "D:\\港口\\args\\test_descriptors.xml", cv::FileStorage::WRITE );
+//////////////////////////////remove on linux///////////////////////////////////////////////////////////////////
+/*
+	cv::FileStorage fs2(  "D:\\港口\\args\\test_descriptors_San18.xml", cv::FileStorage::WRITE );
 	fs2 << "test_descriptors" << _descriptors;
 	fs2.release();
+	_descriptors.~Mat();
 	/** save test data which will be used in the train_test**/
-	char* testdata_file = "D:\\港口\\args\\testdata.xml";
+/*	char* testdata_file = "D:\\港口\\args\\testdata_San18.xml";
 	cv::Mat _count_points( count_points, false );
 	cv::FileStorage fs1( testdata_file, cv::FileStorage::WRITE );
 	fs1 << "feature" << _feature;
@@ -163,44 +167,47 @@ int main()
 	fs1 << "n_blks" << _n_blks;
 	fs1 << "rn" << rn;
 	fs1 << "cn" << cn;
-	fs1 <<"blk_len" << blk_len;
+	fs1 <<"blk_h" << blk_h;
+	fs1 <<"blk_w" << blk_w;
 
 	fs1.release();
-
+*/
 /////////////////////////////remove on linux//////////////////////////////////////////////////////////////////////
 
 	/*svm-test*/
 	cout << "predicting..." <<endl;
+	_feature = nomalize( _feature );
 	CvSVM svm = CvSVM();   
 	cv::Mat __image;
 	cv::Mat _results( _n_blks, 1, CV_32FC1 );
 	svm.load( model_file, "my_svm" );
 	svm.predict( _feature, _results );
-	__image = cv::imread( filename, CV_LOAD_IMAGE_GRAYSCALE );
-	output_target( __image, count_points, rn, cn, blk_len, _n_blks, _results );
+	__image = cv::imread( filename, 1 );//color
+	output_target( __image, count_points, rn, cn, blk_w, blk_h, _n_blks, _results, _target_file );
 	cout << "Done!" <<endl;
 	return 0;
 }
 
 
 
-int output_target( cv::Mat _image, std::vector<int> count_points, int rn, int cn, int blk_len, int _n_blks, cv::Mat _results)
+
+int output_target( cv::Mat _image, std::vector<int> count_points, int rn, int cn, int blk_w, int blk_h, int _n_blks, cv::Mat _results, string _target_file )
 {
 	int i, j;
 	std::vector<int>::const_iterator iter = count_points.begin();
-	_results = _results.reshape( 1, _n_blks );
+	_results = _results.reshape( 1, rn );
 	cv::Mat image( _image.rows, _image.cols, _image.type() );
 	image = cv::Scalar( 0 );
 	for( i = 0; i < rn; i++ )
 		for(j = 0; j < cn; j++ )
 		{
-			if( *iter != 0 && _results.at<float>( i, j ) == 1 )
+			if( *iter != 0 && _results.at<float>( i, j ) == 1.0 )
 			{
-				image.rowRange( blk_len * i, blk_len * ( i + 1 ) ).colRange( blk_len * j, blk_len * ( j + 1 ) ) = _image.rowRange( blk_len * i, blk_len * ( i + 1 ) ).colRange( blk_len * j, blk_len * ( j + 1 ) ); 
+				_image.rowRange( blk_h * i, blk_h * ( i + 1 ) ).colRange( blk_w * j, blk_w * ( j + 1 ) ).copyTo( image.rowRange( blk_h * i, blk_h * ( i + 1 ) ).colRange( blk_w * j, blk_w * ( j + 1 ) ) ); 
 			}
 			iter++;
 		}
-	cv::imwrite( target_file, image );
+	cv::imwrite( _target_file, image );
 	return 0;
 }
 
@@ -272,3 +279,15 @@ void printMat(const cv::Mat mat, char* filename, char* way)
 #endif
 
 
+cv::Mat nomalize( cv::Mat& mat )//normalize the feature data(cv::Mat,and which element type is CV_32FC1 )
+{
+	int i, j;
+	int rows = mat.rows;
+	int cols = mat.cols;
+	cv::Scalar s = cv::sum( mat );
+	float sum = s[0];
+	for( i = 0; i < rows; i++ )
+		for( j = 0; j < cols; j++ )
+			mat.at<float> ( i, j ) /= sum;
+	return mat;
+}

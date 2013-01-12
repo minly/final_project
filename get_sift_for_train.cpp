@@ -37,7 +37,7 @@ int total_points = 0;
 char* traindata_file = "D:\\港口\\args\\traindata.xml";
 char* centers_file = "D:\\港口\\args\\center.xml";
 
-/************************************************************************************/
+/**************************Declaration***************************************************/
 
 void printMat(const cv::Mat mat, char* filename, char* way );
 void bof( cv::Mat _descriptors, cv::Mat& feature, std::vector<int> count_points, int nz_imgs, cv::Mat center );

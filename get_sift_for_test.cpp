@@ -15,6 +15,7 @@ extract feature discriptors of the test image given and then combine them
 #include"opencv/cv.h"
 #include"opencv/cxcore.h"
 #include"opencv2/opencv.hpp"
+#include"opencv2/nonfree/features2d.hpp"
 #include"Image.h"
 #include"ImageFeature.h"
 using namespace std;
@@ -30,9 +31,9 @@ char* model_file = "../args/model_San18.xml";
 string _target_file( "../result/test3_Sandiego18_result.tif" );
 #else
 string filename( "D:\\港口\\test\\test3_Sandiego18.tif" );
-char* centers_file = "D:\\港口\\args\\center.xml";
-char* model_file = "D:\\港口\\args\\model_San18.xml";
-string _target_file( "D:\\港口\\result\\test3_Sandiego18_result.tif" );
+char* centers_file = "D:\\港口\\args_nondense\\center.xml";
+char* model_file = "D:\\港口\\args_nondense\\model_San18.xml";
+string _target_file( "D:\\港口\\result\\test3_Sandiego18_result_nondense.tif" );
 #endif
 
 int total_points = 0;
@@ -54,38 +55,43 @@ int main()
 	
 	int i, j;		
 	vector<string>::const_iterator iterator;
-	Image<uchar> image;
+	//Image<uchar> image;
+	cv::Mat image;
 	cv::Mat mask_img;	
-	Image<float> imsift;
+	//Image<float> imsift;
+	cv::SIFT sift( 0, 4, 0.04, 10.0, 0.5 ); 
+	std::vector<cv::KeyPoint> keypoints;
 	int width, height, n;
 	int c = 0, r = 0, num = 0, _n_blks = 0, offset = 0, k = 0; 
 	std::vector<int> count_points;
 	cv::Mat _descriptor;
 	std::vector<float> descriptors;
-	image.imread( filename.c_str() );//read image and convert to grayscale
-	//image = cv::imread( filename, CV_LOAD_IMAGE_GRAYSCALE );
+	//image.imread( filename.c_str() );//read image and convert to grayscale
+	image = cv::imread( filename, CV_LOAD_IMAGE_GRAYSCALE );
 	int blk_len = 2;
-	int h = image.height();
-	int w = image.width();
-	
+	//int h = image.height();
+	//int w = image.width();
+	int h = image.rows;
+	int w = image.cols;
 	int rn = h / blk_h;
 	int cn = w / blk_w;
-	
+	float* tmp;
 
-	int chn = image.nchannels();
+	/*int chn = image.nchannels();
 	Image<uchar> _image( blk_w, blk_h, chn );
 	
 	int npixels = blk_h * blk_w * chn;
 	int offset_r = 0, offset_c = 0;
 	n = 0;
 	int n_a_line = blk_w * chn;
+	*/
 	/*extract surf for each block*/	
 
 	for( r = 0; r < rn; r++)
 	{			
 		for( c = 0; c < cn; c++)
 		{	
-			offset_r = ( blk_h * r ) * w * chn;
+			/*offset_r = ( blk_h * r ) * w * chn;
 			offset_c = ( blk_w * c ) * chn ;
 			//get the block image
 			for( j = 0; j < npixels; j++ )
@@ -101,25 +107,27 @@ int main()
 					k = 0;
 				}
 			}
-			//_image.imwrite("D://_image.tif" );
+			*/
+		//_image.imwrite("D://_image.tif" );
 			
 				
 			/*set the mask*/
-			//mask_img = image.rowRange( blk_len * r, blk_len * ( r + 1 ) ).colRange( blk_len * c, blk_len * ( c + 1 ) );
-			//_image.
+			mask_img = image.rowRange( blk_h * r, blk_h * ( r + 1 ) ).colRange( blk_w * c, blk_w * ( c + 1 ) );
 			//extract sift descriptor
 			//sift( _image, *mask, keypoints, descriptor, false );//gray_image convert to 8-bit?
+			sift( mask_img, cv::noArray(), keypoints, _descriptor, false ); 
 			//surf( _image, cv::noArray(), keypoints, _descriptor, true);//surf automatically merge the keypoints, if the vector is not reallocated
-			ImageFeature::imSIFT<uchar, float>( _image, imsift, 3, 1, true );
+			//ImageFeature::imSIFT<uchar, float>( _image, imsift, 3, 1, true );
 			//printMat(_descriptor, "D:/_descriptor", "w" );
-			width = imsift.width();
-			height = imsift.height();	   				
-			num = height * width;
-
+			
+			//width = imsift.width();
+			//height = imsift.height();	   				
+			//num = height * width;
+			num =  _descriptor.rows;
 			count_points.push_back( num );//store num of points for each block
 			if( num != 0)
 			{
-				for( i = 0; i < height; i++)
+				/*for( i = 0; i < height; i++)
 					for( j = 0; j < width; j++ )
 					{
 						offset = (i*width+j)*DES_DIMENSION;
@@ -127,12 +135,21 @@ int main()
 							descriptors.push_back( imsift.pData[offset+k]);
 					}
 				total_points += num;
+				_n_blks++;*/
+				for( i = 0; i < num; i++ )
+					for( j = 0; j < DES_DIMENSION; j++ )
+					{
+						 tmp = (float*)(_descriptor.data + _descriptor.step[0] * i + _descriptor.step[1] * j);
+						 descriptors.push_back( *tmp );
+					}
+			
+				total_points += num;
 				_n_blks++;
 			}
 			
 		}
 	}
-	_image.~Image();
+	
 	std::cout << rn*cn << endl;
 	
 	cv::Mat _descriptors( descriptors, false );
@@ -153,13 +170,13 @@ int main()
 	
 
 //////////////////////////////remove on linux///////////////////////////////////////////////////////////////////
-/*
-	cv::FileStorage fs2(  "D:\\港口\\args\\test_descriptors_San18.xml", cv::FileStorage::WRITE );
+
+	cv::FileStorage fs2(  "D:\\港口\\args_nondense\\test_descriptors_San18.xml", cv::FileStorage::WRITE );
 	fs2 << "test_descriptors" << _descriptors;
 	fs2.release();
 	_descriptors.~Mat();
 	/** save test data which will be used in the train_test**/
-/*	char* testdata_file = "D:\\港口\\args\\testdata_San18.xml";
+	char* testdata_file = "D:\\港口\\args_nondense\\testdata_San18.xml";
 	cv::Mat _count_points( count_points, false );
 	cv::FileStorage fs1( testdata_file, cv::FileStorage::WRITE );
 	fs1 << "feature" << _feature;
@@ -171,7 +188,7 @@ int main()
 	fs1 <<"blk_w" << blk_w;
 
 	fs1.release();
-*/
+
 /////////////////////////////remove on linux//////////////////////////////////////////////////////////////////////
 
 	/*svm-test*/

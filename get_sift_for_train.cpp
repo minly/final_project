@@ -8,20 +8,14 @@ extract feature discriptors of all the images under the dir and then combine the
 /************************************************************************************/
 
 #include<iostream>
-#include<fstream>
 #include<vector>
 #include<string>
 #include<sstream>
 #include"opencv/cv.h"
-//#include"opencv/cxcore.h"
 #include"opencv2/opencv.hpp"
-//#include"opencv2/highgui/highgui.hpp"
-//#include"opencv2/core/core.hpp"
-//#include"opencv2/features2d/features2d.hpp"
-//#include"opencv2/nonfree/features2d.hpp"
-//#include"opencv2/nonfree/nonfree.hpp"
-#include "Image.h"
-#include"ImageFeature.h"
+#include"opencv2/nonfree/features2d.hpp"
+//#include "Image.h"
+//#include"ImageFeature.h"
 using namespace std;
 
 
@@ -34,8 +28,8 @@ int nn_files = 31;//negative samples
 
 int total_points = 0;
 
-char* traindata_file = "D:\\港口\\args\\traindata.xml";
-char* centers_file = "D:\\港口\\args\\center.xml";
+char* traindata_file = "D:\\港口\\args_nondense\\traindata.xml";
+char* centers_file = "D:\\港口\\args_nondense\\center.xml";
 
 /**************************Declaration***************************************************/
 
@@ -68,31 +62,33 @@ int main()
 	}
 		
 	vector<string>::const_iterator iterator;
-	//cv::Mat _image;
-	Image<uchar> _image;
-	Image<float> imsift;
-	//cv::SIFT sift; 
+	cv::Mat _image;
+	//Image<uchar> _image;
+	//Image<float> imsift;
+	cv::SIFT sift( 0, 4, 0.04, 10.0, 0.5 ); 
 	//cv::SURF surf;
+	std::vector<cv::KeyPoint> keypoints;
 	int width, height, k, offset = 0;
 	int num = 0, count = 0;
 	int n_imgs = 0;//total num of images
-	int nz_imgs = 0; //num of images have descriptors
-	int np_imgs = 0;//num of positive images that have descriptors
+	int nz_imgs = 0; //num of images have keypoints
+	int np_imgs = 0;//num of positive images that have keypoints
 	std::vector<int> count_points;
 	cv::Mat _descriptor;
 	std::vector<float> descriptors;
+	float* tmp;
 	for( iterator = flist.begin(); iterator != flist.end(); iterator++ )
 	{
-		_image.imread( (*iterator).c_str() );//read image and convert to grayscale
-		//_image = cv::imread( "D:\\airport training data\\negative\\negative8.tif", CV_LOAD_IMAGE_GRAYSCALE );
+		//_image.imread( (*iterator).c_str() );//read image and convert to grayscale
+		_image = cv::imread( (*iterator).c_str(), CV_LOAD_IMAGE_GRAYSCALE );
 		//cv::cvtColor( _image, gray_image, CV_BGR2GRAY );//BGR? or RGB?
 		
 		/*** extract dense sift image ***/
-		ImageFeature::imSIFT<uchar, float>( _image, imsift, 3, 1, true ); 
-		//sift( _image, cv::noArray(), keypoints, _descriptor, true );//gray_image convert to 8-bit?
+		//ImageFeature::imSIFT<uchar, float>( _image, imsift, 3, 1, true ); 
+		sift( _image, cv::noArray(), keypoints, _descriptor, false );//gray_image convert to 8-bit?
 		//surf( _image, cv::noArray(), keypoints, _descriptor, true);//surf automatically merge the keypoints, if the vector is not reallocated
-		width = imsift.width();
-		height = imsift.height();	   				
+		/*width = imsift.width();
+		height = imsift.height();	
 		num = height * width;
 		count_points.push_back( num );//store num of points for each block
 		if( num != 0)
@@ -107,32 +103,39 @@ int main()
 					
 			total_points += num;
 			nz_imgs++;
+		}*/
+		//int chn = _descriptor.channels();
+		num =  _descriptor.rows;
+		count_points.push_back( num );
+		/*put the descriptors data into vector*/
+		if( num != 0 )
+		{
+			for( i = 0; i < num; i++ )
+				for( j = 0; j < DES_DIMENSION; j++ )
+				{
+					 tmp = (float*)(_descriptor.data + _descriptor.step[0] * i + _descriptor.step[1] * j);
+					 descriptors.push_back( *tmp );
+				}
+			
+			total_points += num;
+			nz_imgs++;
 		}
+		keypoints.clear();
 		n_imgs++;
 		
 		if( n_imgs == np_files ) np_imgs = nz_imgs;//record the num of the positive blocks
 	}
-
 	cv::Mat _descriptors( descriptors, false );
 	_descriptors = _descriptors.reshape( 1, total_points );
 	std::cout << "total points: " << total_points << endl;
 	
-
 	/*kmeans*/
 	cv::Mat centers, label;
 	cv::Mat _feature;
 	cv::FileStorage fs( centers_file, cv::FileStorage::WRITE );
 	cv::kmeans( _descriptors, N_CENTERS, label, cvTermCriteria( CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 10, 1.0 ), 1, cv::KMEANS_PP_CENTERS, centers );
-	printMat( _descriptors, "D://_descriptors", "w");
 	fs << "centers" << centers;
 	fs.release();
-
-	///////////////////////////test bug/////////////////////////////////////////////
-	/*cv::FileStorage fs;
-	fs.open( centers_file, cv::FileStorage::READ );
-	fs["centers"] >> centers;
-	fs.release();*/
-	///////////////////////////test bug ///////////////////////////////////////	
 
 	bof( _descriptors, _feature, count_points, nz_imgs, centers );//bagged feature	
 
@@ -197,6 +200,7 @@ void bof( cv::Mat _descriptors, cv::Mat& feature, std::vector<int> count_points,
 	}
 }
 
+/*
 void printMat(const cv::Mat mat, char* filename, char* way)
 {
 	int rows = mat.rows;
@@ -218,6 +222,6 @@ void printMat(const cv::Mat mat, char* filename, char* way)
 	fclose(fp);
 	//output.close();
 }
-
+*/
 
 
